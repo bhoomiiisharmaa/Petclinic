@@ -7,13 +7,19 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = "bhoomisharma333/petclinic"
-        SCANNER_HOME = tool 'sonar-scanner'
+        IMAGE_NAME = "dockerhub_username/petclinic"
     }
 
     stages {
 
-        stage('Build WAR') {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main',
+                url: 'https://github.com/jaiswaladi246/Petclinic.git'
+            }
+        }
+
+        stage('Build') {
             steps {
                 sh 'mvn clean package'
             }
@@ -21,49 +27,26 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonar-server') {
-                    sh '''
-                    $SCANNER_HOME/bin/sonar-scanner \
-                    -Dsonar.projectKey=Petclinic \
-                    -Dsonar.projectName=Petclinic \
-                    -Dsonar.java.binaries=target
-                    '''
+                withSonarQubeEnv('sonar') {
+                    sh 'mvn sonar:sonar'
                 }
             }
         }
 
-        stage('OWASP Dependency Check') {
+        stage('Docker Build') {
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --format HTML', odcInstallation: 'DP'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                sh 'docker build -t $IMAGE_NAME:latest .'
             }
         }
 
-        stage('Docker Build & Push') {
+        stage('Docker Push') {
             steps {
                 withDockerRegistry(
-                    credentialsId: 'dockerhub-creds',
-                    url: 'https://index.docker.io/v1/'
+                  credentialsId: 'dockerhub-creds',
+                  url: ''
                 ) {
-                    sh '''
-                    docker build -t $IMAGE_NAME:latest .
-                    docker push $IMAGE_NAME:latest
-                    '''
+                    sh 'docker push $IMAGE_NAME:latest'
                 }
-            }
-        }
-
-        stage('Trivy Image Scan') {
-            steps {
-                sh 'trivy image $IMAGE_NAME:latest'
-            }
-        }
-
-        stage('Deploy To Tomcat') {
-            steps {
-                sh '''
-                cp target/petclinic.war /opt/apache-tomcat-9.0.65/webapps/
-                '''
             }
         }
     }
