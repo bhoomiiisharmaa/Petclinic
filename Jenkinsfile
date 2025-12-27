@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent { label 'slave1' }
 
     tools {
         maven 'MAVEN'
@@ -57,26 +57,21 @@ pipeline {
             }
         }
 
-        stage('Checkout K8s Repo') {
+        stage('Update K8s Manifests Repo') {
             steps {
                 dir('k8s') {
                     git branch: 'main',
-                        url: 'https://github.com/bhoomiiisharmaa/app-k8s.git'
+                        url: 'https://github.com/bhoomiiisharmaa/app-k8s.git',
+                        credentialsId: 'github-creds'
+
+                    sh '''
+                    sed -i "s|image:.*|image: $DOCKER_IMAGE:$BUILD_NUMBER|" deployment.yaml
+                    git config user.email "jenkins@ci.com"
+                    git config user.name "jenkins"
+                    git commit -am "Update image to $BUILD_NUMBER"
+                    git push origin main
+                    '''
                 }
-            }
-        }
-
-        stage('Update Image Tag') {
-            steps {
-                sh '''
-                sed -i "s|image:.*|image: $DOCKER_IMAGE:$BUILD_NUMBER|" k8s/deployment.yaml
-                '''
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
-            steps {
-                sh 'kubectl apply -f k8s/'
             }
         }
     }
